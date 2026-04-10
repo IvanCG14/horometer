@@ -41,7 +41,7 @@ pyodbc==4.0.35
 python-dotenv==1.0.0
 
 # Manejo de datos estructurados
-dataclasses-json==0.5.14
+dataclasses-json
 
 # Logging avanzado (opcional)
 # python-json-logger==2.0.7

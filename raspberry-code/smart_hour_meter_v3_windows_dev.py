@@ -338,14 +338,14 @@ class DatabaseManager:
         try:
             conn_str = (
                 "Driver={ODBC Driver 17 for SQL Server};"
-                "Server=192.168.1.50\\SQLEXPRESS;"
+                "Server=localhost\\SQLEXPRESS;"
                 "Database=ERP_Production;"
-                "UID=sa;"
-                "PWD=contraseña;"
+                "Trusted_Connection=yes;"
                 "TrustServerCertificate=yes"
             )
             self.conn = pyodbc.connect(conn_str)
             print("[BD] Conectado a SQL Server")
+
         except Exception as e:
             print(f"[BD] No se pudo conectar: {e}")
             print("[BD] Usando modo mock")
@@ -396,7 +396,7 @@ class DatabaseManager:
         try:
             cursor = self.conn.cursor()
             query = """
-                SELECT DISTINCT
+                SELECT 
                     COALESCE(og.Op_Group, '') AS op_group_id,
                     COALESCE(og.Name, jo.Description) AS op_group_name,
                     STRING_AGG(jo.Job, '-') AS jobs,
@@ -408,7 +408,11 @@ class DatabaseManager:
                 INNER JOIN dbo.Job j ON jo.Job = j.Job
                 LEFT JOIN dbo.Op_Group og ON jo.Op_Group = og.Op_Group
                 WHERE jo.Work_Center = ?
-                GROUP BY COALESCE(og.Op_Group, jo.Job_Operation), ...
+                GROUP BY 
+                    og.Op_Group, 
+                    og.Name, 
+                    jo.Description, 
+                    jo.Job_Operation
             """
             cursor.execute(query, ("TORNO 17",))
             
@@ -450,7 +454,7 @@ class DatabaseManager:
                    (Employee, Job, Job_Operation, Work_Center, 
                     Order_Quantity, Completed_Quantity, Motor_Time_Seconds,
                     Actual_Run_Hrs, Status, Record_Date)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Completed', GETUTCDATE())""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Completed', GETDATE())""",
                 (session.employee.employee_id,
                  session.selected_task.job_display,
                  session.selected_task.operation_display,
@@ -522,6 +526,14 @@ class SmartHourMeterApp:
                 self.lcd.print(f"> {task.op_group_name[:18]}", 1)
                 self.lcd.print(f"Meta: {task.order_quantity}", 2)
                 self.lcd.print(f"[{self.menu_index + 1}/{len(self.tasks)}]", 3)
+
+        # Sugerencia de cambio en el bloque MONITORING
+        elif self.state == SystemState.MONITORING:
+            self.lcd.print(f"TRABAJANDO EN:", 0)
+            if self.tasks:
+                task = self.tasks[self.menu_index]
+                self.lcd.print(f"> {task.op_group_name[:18]}", 1) # Muestra el nombre del grupo
+                self.lcd.print("OK=FINALIZAR TAREA", 3)
         
         elif self.state == SystemState.INPUT_COMPLETED:
             self.lcd.print("¿PIEZAS TERMINADAS?", 0)
@@ -539,7 +551,25 @@ class SmartHourMeterApp:
         elif command.lower() == "confirm":
             self.simulate_button_confirm()
         elif command.lower() == "motor":
+            # 1. Detectar si el motor estaba apagado antes del cambio
+            was_off = not self.gpio.simulated_vfd_running
+            
+            # 2. Cambiar el estado del motor
             self.gpio.simulate_vfd_toggle()
+            
+            # 3. Lógica de cronómetro
+            if was_off:
+                # Si se encendió, guardamos la hora de inicio en la sesión
+                self.session.monitoring_start_time = datetime.now()
+                print(f"[DEBUG] Inicio de conteo: {self.session.monitoring_start_time.strftime('%H:%M:%S')}")
+            else:
+                # Si se apagó, calculamos la diferencia y la sumamos al total
+                if self.session.monitoring_start_time:
+                    delta = datetime.now() - self.session.monitoring_start_time
+                    segundos_ganados = int(delta.total_seconds())
+                    self.session.time_motor_seconds += segundos_ganados
+                    print(f"[DEBUG] Motor detenido. Sumados {segundos_ganados}s. Total: {self.session.time_motor_seconds}s")
+                    self.session.monitoring_start_time = None
         elif command.lower() == "status":
             print(f"\n[STATUS] Estado: {self.state.name}")
             print(f"[STATUS] Empleado: {self.session.employee}")
