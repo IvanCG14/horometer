@@ -1,0 +1,15 @@
+# Crear archivo .gitignore
+cat > .gitignore << EOF
+venv/
+.env
+.env.local
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.log
+.vscode/
+.idea/
+*.swp
+*.swo
+EOF

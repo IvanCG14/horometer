@@ -1,0 +1,284 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                                                                           ║
+║        🏭 SMART HOUR METER - VERSIÓN 2.0 (INDUSTRIAL)                   ║
+║           Integración con Asignaciones ERP en Tiempo Real                ║
+║                                                                           ║
+║    Basado en ESP32 con SQL Server y API intermedia PHP                  ║
+║    Centro de Trabajo: TORNO 17 (Configurable)                           ║
+║                                                                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+📂 ARCHIVOS INCLUIDOS - VERSIÓN 2.0
+
+VERSIÓN 1 (GENÉRICO - Base):
+  ✓ main.cpp                         (Firmware v1)
+  ✓ api_ejemplo.php                  (API simple v1)
+  ✓ database_schema.sql              (BD simple v1)
+  ✓ platformio.ini, config.h, etc.   (Configuración)
+
+VERSIÓN 2 (INDUSTRIAL - NUEVO):
+  ✓ main_v2_industrial.cpp           ← Firmware actualizado
+  ✓ api_v2_industrial.php            ← API con asignaciones ERP
+  ✓ database_v2_industrial.sql       ← Schema con tablas ERP reales
+  ✓ INTEGRACION_INDUSTRIAL_v2.md     ← Guía técnica detallada
+  ✓ MIGRACION_RAPIDA_v1_a_v2.md      ← Paso a paso migración
+
+DOCUMENTACIÓN:
+  ✓ README.md                        (Guía inicio rápido v1)
+  ✓ DOCUMENTACION_TECNICA.md         (Manual técnico completo)
+  ✓ CONEXIONES_Y_WIRING.md           (Diagramas eléctricos)
+  ✓ RESUMEN_ENTREGA.md               (Presentación ejecutiva)
+  + Más archivos de apoyo
+
+═══════════════════════════════════════════════════════════════════════════
+
+🎯 ¿CUÁL VERSIÓN NECESITO?
+
+▶ VERSIÓN 1 (v1 - Genérico)
+  Usar si: Necesitas lista simple de operarios/piezas/tipos
+  Casos: Prototipo, ambiente no conectado a ERP
+  Archivos: main.cpp + api_ejemplo.php + database_schema.sql
+
+▶ VERSIÓN 2 (v2 - Industrial)  ⭐ RECOMENDADO
+  Usar si: Tienes ERP con asignaciones reales de empleados
+  Casos: Producción, integración con TORNO 17 + asignaciones
+  Archivos: main_v2_industrial.cpp + api_v2_industrial.php + database_v2_industrial.sql
+
+═══════════════════════════════════════════════════════════════════════════
+
+🚀 GUÍA DE INICIO RÁPIDO v2
+
+PASO 1: Leer documentación (10 min)
+  └─ INTEGRACION_INDUSTRIAL_v2.md (completa y técnica)
+  └─ MIGRACION_RAPIDA_v1_a_v2.md (si vienes de v1)
+
+PASO 2: Preparar base de datos (10 min)
+  └─ Ejecutar: database_v2_industrial.sql en SQL Server
+  └─ Crea BD "ERP_Production" con tablas ERP reales
+
+PASO 3: Implementar API (5 min)
+  └─ Copiar: api_v2_industrial.php a servidor web
+  └─ Editar: Credenciales SQL Server (líneas 21-28)
+  └─ Probar: http://servidor/api/log-mecanizado.php?action=getAssignments&workCenter=TORNO_17
+
+PASO 4: Actualizar firmware (10 min)
+  └─ Copiar: main_v2_industrial.cpp a src/main.cpp
+  └─ Editar: WiFi, API endpoint, WORK_CENTER (líneas 24-26)
+  └─ Compilar: pio run -t upload
+
+PASO 5: Validar (5 min)
+  └─ Boot log debe mostrar "Found X active assignment(s)"
+  └─ LCD debe mostrar asignación del servidor
+  └─ Datos debe guardarse en Job_Operation_ActualTime
+
+⏱️  Tiempo total: ~40 minutos
+
+═══════════════════════════════════════════════════════════════════════════
+
+📊 DIFERENCIAS PRINCIPALES v1 vs v2
+
+┌──────────────────┬──────────────────────┬──────────────────────┐
+│ Aspecto          │ v1 (Genérico)        │ v2 (Industrial)      │
+├──────────────────┼──────────────────────┼──────────────────────┤
+│ Flujo LCD        │ 3 menús secuenciales │ 1 asignación mostrada│
+│ Datos            │ Listas estáticas     │ Asignaciones dinám.  │
+│ Base de datos    │ Tablas simples       │ Tablas ERP reales    │
+│ API GET          │ getCache             │ getAssignments       │
+│ API POST         │ 5 campos             │ 9 campos ERP         │
+│ Identificadores  │ Texto libre          │ Employee/Job/Op IDs  │
+│ Escalabilidad    │ Baja                 │ Completa (N centros) │
+│ ERP Integration  │ No                   │ Sí (100%)            │
+└──────────────────┴──────────────────────┴──────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════
+
+🔧 CONFIGURACIÓN INDUSTRIAL v2
+
+Centro de Trabajo:     TORNO 17 (editable en main_v2_industrial.cpp)
+Base de Datos:         ERP_Production
+Tabla Principal:       Emp_Assignment (Asignaciones activas)
+Tabla de Resultados:   Job_Operation_ActualTime (Tiempos reales)
+API Endpoint:          ?action=getAssignments&workCenter=TORNO_17
+
+Datos que se sincronizan:
+  ✓ Employee ID (EMP001, EMP002, ...)
+  ✓ Job Code (JOB001, JOB002, ...)
+  ✓ Job Operation (OP001, OP002, ...)
+  ✓ Op Group (GRP001, GRP002, ...)
+  ✓ Part Number (PT-2024-001, ...)
+  ✓ Work Center (TORNO 17)
+  ✓ Estimated Hours
+  ✓ Shift Info (Turno del empleado)
+
+═══════════════════════════════════════════════════════════════════════════
+
+⚠️  REQUISITOS PREVIOS v2
+
+Hardware:
+  ✓ ESP32 DOIT DevKit v1
+  ✓ LCD 20x4 con I2C
+  ✓ 5 Botones + Relé + Cable VFD
+
+Software:
+  ✓ SQL Server 2016+ (SQLEXPRESS OK)
+  ✓ PHP 7.2+ con extensión SQLSRV
+  ✓ PlatformIO (CLI o IDE)
+
+Red:
+  ✓ WiFi planta para ESP32
+  ✓ Conexión a SQL Server desde servidor web
+  ✓ Acceso a API desde ESP32
+
+═══════════════════════════════════════════════════════════════════════════
+
+✅ CARACTERÍSTICAS PRESERVADAS (Sin cambios)
+
+Estos componentes siguen IGUAL en v1 y v2:
+
+  ✓ Debounce de botones: 50ms
+  ✓ Debounce de VFD: 150ms (anti-ruido industrial)
+  ✓ Watchdog Timer: 10 segundos (protección ante congelamiento)
+  ✓ Timeout de sesión: 5 horas
+  ✓ LittleFS para caché local y recuperación ante apagón
+  ✓ Máquina de estados robusta
+  ✓ Relé interlock de seguridad
+
+═══════════════════════════════════════════════════════════════════════════
+
+📈 ESCALABILIDAD v2
+
+Soporta múltiples:
+  • Centros de trabajo (TORNO 17, TORNO 18, FRESADORA 1, ...)
+  • Dispositivos por centro (1 ESP32 por torno)
+  • Empleados asignados (N)
+  • Órdenes de trabajo simultáneas (N)
+  • Histórico de tiempos (auditable)
+
+Práctico para:
+  • Plantas con múltiples máquinas
+  • Talleres con 10+ operarios
+  • Producción en jornada (3 turnos)
+  • Reportes de rendimiento
+
+═══════════════════════════════════════════════════════════════════════════
+
+🔄 FLUJO DE DATOS v2
+
+┌──────────────┐
+│  SQL Server  │  ← BD ERP con asignaciones activas
+│              │     Emp_Assignment, Job_Operation, Employee
+└───────┬──────┘
+        │
+        ▼
+┌──────────────────────┐
+│  API PHP v2          │  ← Intermedia que filtra por centro
+│  log-mecanizado.php  │     GET: Devuelve asignaciones
+└───────┬──────────────┘     POST: Guarda tiempos reales
+        │
+        │ WiFi
+        ▼
+┌──────────────┐
+│   ESP32      │  ← Dispositivo en torno
+│   TORNO 17   │     Muestra asignación en LCD
+└───────┬──────┘     Detecta motor (VFD)
+        │             Registra tiempo
+        │
+    [Motor]
+    [Relé]
+
+Resultado:
+  → Tabla Job_Operation_ActualTime con tiempos reales
+  → Histórico auditable
+  → Datos para análisis de rendimiento
+
+═══════════════════════════════════════════════════════════════════════════
+
+📋 CHECKLIST DE INSTALACIÓN v2
+
+Base de Datos:
+  ☐ Ejecutar database_v2_industrial.sql
+  ☐ Crear BD "ERP_Production"
+  ☐ Insertar datos de prueba (incluidos)
+  ☐ Verificar: SELECT COUNT(*) FROM Emp_Assignment;
+
+API:
+  ☐ Copiar api_v2_industrial.php
+  ☐ Editar credenciales SQL Server
+  ☐ Probar en navegador (GET ?action=getAssignments)
+  ☐ Verificar response JSON es válido
+
+Firmware:
+  ☐ Copiar main_v2_industrial.cpp a src/main.cpp
+  ☐ Editar WiFi SSID/PASSWORD
+  ☐ Editar API_ENDPOINT
+  ☐ Editar WORK_CENTER = "TORNO 17"
+  ☐ Compilar: pio run
+  ☐ Subir: pio run -t upload
+
+Validación:
+  ☐ Serial log muestra "Found X active assignments"
+  ☐ LCD muestra empleado y operación
+  ☐ Presionar buttons funciona (sin dobles)
+  ☐ VFD signal se detecta
+  ☐ Relé abre/cierra
+  ☐ Watchdog activo
+  ☐ Datos se guardan en SQL Server
+
+═══════════════════════════════════════════════════════════════════════════
+
+❓ PREGUNTAS FRECUENTES v2
+
+P: ¿Puedo usar v1 y v2 simultáneamente?
+R: Sí, en máquinas diferentes o BD diferentes, pero la API debe saber 
+   cuál versión usar (incluir parámetro de versión si es necesario).
+
+P: ¿Qué pasa si falla WiFi?
+R: ESP32 usa caché local (assignements.json en LittleFS) con último 
+   descargado. Sigue funcionando offline hasta siguiente sincronización.
+
+P: ¿Cómo agregó nuevas asignaciones sin reiniciar?
+R: Insertar en Emp_Assignment en SQL, esperar a próximo boot de ESP32 
+   o implementar endpoint que forze descarga manual.
+
+P: ¿Puedo cambiar TORNO 17 por otro centro?
+R: Sí, editar en main_v2_industrial.cpp:
+   const char* WORK_CENTER = "TORNO 18";
+   Cada dispositivo reporta su propio centro.
+
+P: ¿El tiempo registrado es exacto?
+R: Hasta milisegundos en ESP32, truncado a 4 decimales en BD 
+   (ej: 1.2345 horas). Precisión suficiente para producción.
+
+═══════════════════════════════════════════════════════════════════════════
+
+📞 DOCUMENTOS DE REFERENCIA
+
+Inicio rápido v2:          INTEGRACION_INDUSTRIAL_v2.md
+Migración v1 → v2:         MIGRACION_RAPIDA_v1_a_v2.md
+Técnico completo:          DOCUMENTACION_TECNICA.md (v1, válido para v2)
+Conexiones eléctricas:     CONEXIONES_Y_WIRING.md
+Troubleshooting:           README.md (sección FAQ)
+
+═══════════════════════════════════════════════════════════════════════════
+
+🎉 ¡LISTO PARA PRODUCCIÓN!
+
+v2 está diseñada para:
+  ✓ Integración 100% con ERP
+  ✓ Asignaciones dinámicas en tiempo real
+  ✓ Trazabilidad industrial completa
+  ✓ Múltiples centros de trabajo
+  ✓ Histórico auditable
+  ✓ Escalabilidad garantizada
+
+Siguientes pasos:
+  1. Lee INTEGRACION_INDUSTRIAL_v2.md (técnico)
+  2. Prepara BD con database_v2_industrial.sql
+  3. Implementa API v2
+  4. Actualiza firmware ESP32
+  5. Valida con checklist
+  6. ¡A producción!
+
+═══════════════════════════════════════════════════════════════════════════
+Versión: 2.0 | Tipo: Industrial | Status: ✅ Listo | Centro: TORNO 17
+═══════════════════════════════════════════════════════════════════════════

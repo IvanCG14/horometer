@@ -1,0 +1,145 @@
+# Smart Hour Meter v3 - Requirements
+# Proyecto: Horómetro Industrial con Raspberry Pi Zero
+# Versión: 3.0
+# Actualizado: 2026-04-09
+
+# ============================================================================
+# NOTA IMPORTANTE PARA DESARROLLO EN WINDOWS
+# ============================================================================
+# Algunas librerías están diseñadas para Raspberry Pi (GPIO/I2C).
+# En Windows para desarrollo, se pueden hacer "mock" de estas.
+# Ver: smart_hour_meter_v3_windows_dev.py (versión con mocks incluida)
+
+# ============================================================================
+# LIBRERÍAS PRINCIPALES (Requeridas en Raspberry Pi)
+# ============================================================================
+
+# Control de pines GPIO (solo en Raspberry Pi)
+# RPi.GPIO==0.7.0
+
+# Comunicación I2C para LCD (solo en Raspberry Pi)
+# smbus2==0.4.3
+
+# Control de GPIO alternativo (más moderno que RPi.GPIO)
+# gpiozero==2.0.1
+
+# ============================================================================
+# BASE DE DATOS - SQL Server
+# ============================================================================
+
+# Conector ODBC para SQL Server (CRÍTICO - Requerido)
+pyodbc==4.0.35
+
+# Alternativa: sqlalchemy para ORM (opcional)
+# SQLAlchemy==2.0.23
+
+# ============================================================================
+# UTILIDADES COMUNES (Multiplataforma)
+# ============================================================================
+
+# Manejo de configuración
+python-dotenv==1.0.0
+
+# Manejo de datos estructurados
+dataclasses-json==0.5.14
+
+# Logging avanzado (opcional)
+# python-json-logger==2.0.7
+
+# ============================================================================
+# DESARROLLO Y TESTING (Opcional)
+# ============================================================================
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+
+# Linting y format
+black==23.12.0
+flake8==6.1.0
+pylint==3.0.3
+
+# Type checking
+mypy==1.7.1
+
+# ============================================================================
+# VERSIÓN DE PYTHON
+# ============================================================================
+# Requerido: Python 3.9 o superior
+# Recomendado: Python 3.11+
+
+# Para crear environment:
+# python -m venv venv
+# venv\Scripts\activate (Windows)
+# source venv/bin/activate (Linux/Mac)
+# pip install -r requirements.txt
+
+# ============================================================================
+# INSTALACIÓN EN WINDOWS (Desarrollo)
+# ============================================================================
+
+# 1. Crear environment:
+#    python -m venv venv
+#
+# 2. Activar environment:
+#    venv\Scripts\activate
+#
+# 3. Instalar pyodbc en Windows:
+#    pip install pyodbc
+#
+# 4. Instalar ODBC Driver 17 for SQL Server:
+#    https://www.microsoft.com/en-us/download/details.aspx?id=56567
+#
+# 5. Instalar requirements:
+#    pip install -r requirements.txt
+#
+# 6. Verificar instalación:
+#    python -c "import pyodbc; print('OK')"
+
+# ============================================================================
+# INSTALACIÓN EN RASPBERRY PI (Producción)
+# ============================================================================
+
+# Ver: install_v3_rpi.sh
+# Script automatizado que instala todo incluyendo:
+# - ODBC Driver 17
+# - RPi.GPIO
+# - smbus2
+# - Todas las dependencias del requirements.txt
+
+# ============================================================================
+# NOTAS IMPORTANTES
+# ============================================================================
+
+# WINDOWS DEVELOPMENT:
+# - pyodbc requiere ODBC Driver 17 instalado en el sistema
+# - Descargar desde: https://www.microsoft.com/en-us/download/details.aspx?id=56567
+# - RPi.GPIO NO se instala en Windows (importar solo en Raspberry Pi)
+# - smbus2 NO se instala en Windows (importar solo en Raspberry Pi)
+# - Usar versión de desarrollo con mocks si quieres testear GPIO/I2C
+
+# RASPBERRY PI PRODUCTION:
+# - Ejecutar install_v3_rpi.sh que instala ODBC Driver 17
+# - RPi.GPIO se instala automáticamente
+# - smbus2 se instala automáticamente
+# - Servicio systemd se configura automáticamente
+
+# TESTING/MOCKING EN WINDOWS:
+# - Ver: smart_hour_meter_v3_windows_dev.py
+# - Reemplaza GPIO y LCD con mocks
+# - Permite desarrollar sin hardware real
+
+# ============================================================================
+# ACTUALIZACIÓN DE DEPENDENCIAS
+# ============================================================================
+
+# Ver versiones disponibles:
+# pip list --outdated
+#
+# Actualizar todo:
+# pip install --upgrade -r requirements.txt
+#
+# Crear nuevo requirements con versiones actuales:
+# pip freeze > requirements-current.txt
+
+# ============================================================================
