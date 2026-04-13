@@ -3,8 +3,10 @@ driver: msodbcsql18
 libreria: pyodbc
 Raspberry Pi Zero 2 W (necesita micro sd)
 
+boton retroceder, rele interlock
 
-
-Pi Pico W/ Micropython/ Rp2040/ Tipo C
-
-Sugerencia: Asegúrate de que el DatabaseManager tenga una lógica de reconexión automática (un bloque try-except que intente reconectar antes de cada consulta) para que el horómetro no se quede trabado si el servidor SQL se reinicia.
+Sugerencia: Asegúrate de que el DatabaseManager
+tenga una lógica de reconexión automática
+(un bloque try-except que intente reconectar
+antes de cada consulta) para que el horómetro
+no se quede trabado si el servidor SQL se reinicia.

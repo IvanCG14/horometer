@@ -194,7 +194,14 @@ class GPIOController:
             GPIO.setup(27, GPIO.IN, pull_up_down=GPIO.PUD_UP)   # BTN UP
             GPIO.setup(22, GPIO.IN, pull_up_down=GPIO.PUD_UP)   # BTN DOWN
             GPIO.setup(23, GPIO.IN, pull_up_down=GPIO.PUD_UP)   # BTN CONFIRM
-            
+            self.btn_back_pin = 24
+            GPIO.setup(self.btn_back_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP) #BTN BACK
+
+            # Pin de Interlock (Salida)
+            self.interlock_pin = 18
+            GPIO.setup(self.interlock_pin, GPIO.OUT)
+            GPIO.output(self.interlock_pin, GPIO.LOW) # Inicia apagado
+
             print("[GPIO] Inicializado correctamente")
         except Exception as e:
             print(f"[GPIO] Error: {e} - Usando modo mock")
@@ -205,7 +212,7 @@ class GPIOController:
         self.vfd_debounce_time = 0.15
         
         self.btn_debounce_time = 0.05
-        self.last_btn_time = {27: 0, 22: 0, 23: 0}
+        self.last_btn_time = {27: 0, 22: 0, 23: 0, 24: 0}
         
         # Para simular en Windows
         self.simulated_button_press = None
@@ -231,6 +238,18 @@ class GPIOController:
             return current_state
         
         return self.last_vfd_state
+    
+    def set_interlock(self, state: bool):
+        """Activa o desactiva el interlock físico"""
+        level = GPIO.HIGH if state else GPIO.LOW
+        try:
+            GPIO.output(self.interlock_pin, level)
+            status = "ACTIVO" if state else "INACTIVO"
+            print(f"[GPIO] Interlock {status}")
+        except:
+            # Para el modo Mock en Windows
+            status = "ACTIVO" if state else "INACTIVO"
+            print(f"[MOCK GPIO] Salida Interlock (Pin 18) -> {status}")
     
     def read_button(self, pin: int) -> bool:
         """Leer botón con debounce"""
@@ -258,6 +277,10 @@ class GPIOController:
     
     def read_button_confirm(self) -> bool:
         return self.read_button(23)
+    
+    def read_button_back(self) -> bool:
+        """Leer botón de retroceso"""
+        return self.read_button(24)
     
     def simulate_button_press(self, button_id: int):
         """Simular presión de botón en Windows"""
@@ -517,15 +540,22 @@ class SmartHourMeterApp:
             emp = self.employees[self.menu_index]
             self.lcd.print(f"> {emp.display_name[:18]}", 1)
             self.lcd.print(f"[{self.menu_index + 1}/{len(self.employees)}]", 2)
-            self.lcd.print("OK=Confirmar", 3)
+            self.lcd.print("OK=Conf BACK=Volver", 3)
         
         elif self.state == SystemState.SELECT_TASK:
             self.lcd.print("SELECCIONAR TAREA", 0)
             if self.tasks:
                 task = self.tasks[self.menu_index]
+                # Línea 1: Nombre de la tarea
                 self.lcd.print(f"> {task.op_group_name[:18]}", 1)
-                self.lcd.print(f"Meta: {task.order_quantity}", 2)
-                self.lcd.print(f"[{self.menu_index + 1}/{len(self.tasks)}]", 3)
+                
+                # Línea 2: Cantidad objetivo
+                self.lcd.print(f"Piezas Requeridas: {task.order_quantity}", 2)
+                
+                # Línea 3: Navegación + Instrucciones (Compacto)
+                # Ejemplo visual: "[1/3] OK:Sel BK:Vol"
+                nav_info = f"[{self.menu_index + 1}/{len(self.tasks)}]"
+                self.lcd.print(f"{nav_info} OK:Sel BACK:Volver", 3)
 
         # Sugerencia de cambio en el bloque MONITORING
         elif self.state == SystemState.MONITORING:
@@ -546,6 +576,8 @@ class SmartHourMeterApp:
         """Manejar comandos de consola en Windows"""
         if command.lower() == "up":
             self.simulate_button_up()
+        elif command.lower() == "back":
+            self.simulate_button_back()
         elif command.lower() == "down":
             self.simulate_button_down()
         elif command.lower() == "confirm":
@@ -591,6 +623,26 @@ class SmartHourMeterApp:
         elif self.state == SystemState.INPUT_COMPLETED:
             self.quantity_input += 1
     
+    def simulate_button_back(self):
+        """Lógica para retroceder de estado"""
+        if self.state == SystemState.SELECT_EMPLOYEE:
+            # Volver al inicio y limpiar sesión
+            self.session.reset()
+            self.menu_index = 0
+            self.state = SystemState.HOME
+            print("[APP] Regresando a HOME")
+
+        elif self.state == SystemState.SELECT_TASK:
+            # Volver a selección de empleado
+            self.session.selected_task = None
+            self.menu_index = 0
+            self.state = SystemState.SELECT_EMPLOYEE
+            print("[APP] Regresando a SELECT_EMPLOYEE")
+        
+        else:
+            # No hace nada en MONITORING o HOME para evitar errores accidentales
+            pass
+
     def simulate_button_down(self):
         if self.state == SystemState.SELECT_EMPLOYEE:
             self.menu_index = (self.menu_index + 1) % len(self.employees)
@@ -618,8 +670,12 @@ class SmartHourMeterApp:
                 self.session.selected_task = self.tasks[self.menu_index]
                 self.session.session_start_time = datetime.now()
                 self.state = SystemState.MONITORING
+                # ACTVAR INTERLOCK al iniciar monitoreo
+                self.gpio.set_interlock(True)
         
         elif self.state == SystemState.MONITORING:
+            # DESACTIVAR INTERLOCK al finalizar la tarea
+            self.gpio.set_interlock(False)
             self.quantity_input = 0
             self.state = SystemState.INPUT_COMPLETED
         
@@ -640,6 +696,7 @@ class SmartHourMeterApp:
         print("  up       - Botón arriba")
         print("  down     - Botón abajo")
         print("  confirm  - Botón confirmar")
+        print("  back     - Botón retroceder")
         print("  motor    - Toggle motor ON/OFF (simular VFD)")
         print("  status   - Ver estado actual")
         print("  help     - Este mensaje")

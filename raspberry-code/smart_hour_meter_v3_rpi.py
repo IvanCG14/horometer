@@ -26,12 +26,14 @@ PIN_VFD_SIGNAL = 17          # GPIO 17 - Entrada del VFD (HIGH = motor corriendo
 PIN_BTN_UP = 27              # GPIO 27 - Botón arriba
 PIN_BTN_DOWN = 22            # GPIO 22 - Botón abajo
 PIN_BTN_CONFIRM = 23         # GPIO 23 - Botón confirmar
+PIN_BTN_BACK = 24            # GPIO 24 - Botón de retroceso
+PIN_INTERLOCK = 18           # GPIO 18 - Salida de control (Relé/SSR)
 
 # ============================================================================
 # CONFIGURACIÓN SQL SERVER
 # ============================================================================
 
-DB_SERVER = "192.168.1.50\\SQLEXPRESS"  # Cambiar según tu servidor
+DB_SERVER = "localhost\\SQLEXPRESS"  # Cambiar según tu servidor
 DB_NAME = "ERP_Production"
 DB_USER = "sa"
 DB_PASSWORD = "tu_contraseña"  # Cambiar por contraseña real
@@ -236,7 +238,12 @@ class GPIOController:
         GPIO.setup(PIN_BTN_UP, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(PIN_BTN_DOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
         GPIO.setup(PIN_BTN_CONFIRM, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        
+        GPIO.setup(PIN_BTN_BACK, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+        # Salida Interlock
+        GPIO.setup(PIN_INTERLOCK, GPIO.OUT)
+        GPIO.output(PIN_INTERLOCK, GPIO.LOW) # Inicia desactivado
+
         # Variables de debounce
         self.last_vfd_state = False
         self.last_vfd_change_time = time.time()
@@ -244,7 +251,7 @@ class GPIOController:
         
         self.btn_debounce_time = 0.05  # 50ms debounce botones
         self.last_btn_time = {}
-        for pin in [PIN_BTN_UP, PIN_BTN_DOWN, PIN_BTN_CONFIRM]:
+        for pin in [PIN_BTN_UP, PIN_BTN_DOWN, PIN_BTN_CONFIRM, PIN_BTN_BACK]:
             self.last_btn_time[pin] = 0
         
         print("[GPIO] GPIO inicializado correctamente")
@@ -288,6 +295,15 @@ class GPIOController:
     
     def read_button_confirm(self) -> bool:
         return self.read_button(PIN_BTN_CONFIRM)
+    
+    def read_button_back(self) -> bool:
+        return self.read_button(PIN_BTN_BACK)
+    
+    def set_interlock(self, state: bool):
+        """Activa o desactiva la salida física del interlock"""
+        level = GPIO.HIGH if state else GPIO.LOW
+        GPIO.output(PIN_INTERLOCK, level)
+        print(f"[GPIO] Interlock {'ACTIVO' if state else 'INACTIVO'}")
     
     def cleanup(self):
         """Limpiar GPIO"""
@@ -370,7 +386,7 @@ class DatabaseManager:
             
             # Consulta que agrupa tareas
             query = """
-                SELECT DISTINCT
+                SELECT 
                     COALESCE(og.Op_Group, '') AS op_group_id,
                     COALESCE(og.Name, jo.Description) AS op_group_name,
                     STRING_AGG(jo.Job, '-') AS jobs,
@@ -378,20 +394,20 @@ class DatabaseManager:
                     SUM(j.Order_Quantity) AS total_quantity,
                     AVG(jo.Est_Run_Hrs) AS est_hours,
                     CASE WHEN og.Op_Group IS NOT NULL THEN 1 ELSE 0 END AS es_grupo
-                
                 FROM dbo.Job_Operation jo
                 INNER JOIN dbo.Job j ON jo.Job = j.Job
                 LEFT JOIN dbo.Op_Group og ON jo.Op_Group = og.Op_Group
-                
+
                 WHERE jo.Work_Center = ?
-                  AND j.job_status IN ('Open', 'In_Progress')
-                  AND jo.operation_status != 'Complete'
-                
+                -- FILTROS CRÍTICOS (Añadidos a DEV para igualar a RPI)
+                AND j.job_status IN ('Open', 'In_Progress')
+                AND jo.operation_status != 'Complete'
+
                 GROUP BY 
                     COALESCE(og.Op_Group, jo.Job_Operation),
                     COALESCE(og.Name, jo.Description),
                     CASE WHEN og.Op_Group IS NOT NULL THEN 1 ELSE 0 END
-                
+
                 ORDER BY op_group_name
             """
             
@@ -433,8 +449,8 @@ class DatabaseManager:
             query = """
                 INSERT INTO dbo.Job_Operation_ActualTime 
                     (Employee, Job, Job_Operation, Work_Center, Actual_Run_Hrs, 
-                     Completed_Quantity, Motor_Time_Seconds, Status, Record_Date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'Completed', GETUTCDATE())
+                     Order_Quantity, Completed_Quantity, Motor_Time_Seconds, Record_Date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'Completed', GETDATE())
             """
             
             actual_hours = session.time_motor_seconds / 3600.0  # Convertir segundos a horas
@@ -444,9 +460,10 @@ class DatabaseManager:
                 session.selected_task.job_display,
                 session.selected_task.operation_display,
                 WORK_CENTER,
-                actual_hours,
+                session.selected_task.order_quantity,
                 session.completed_quantity,
-                session.time_motor_seconds
+                session.time_motor_seconds,
+                actual_hours,
             ))
             
             self.conn.commit()
@@ -512,9 +529,9 @@ class SmartHourMeterApp:
         emp = self.employees[self.menu_index]
         self.lcd.print(f"> {emp.display_name[:18]}", 1)
         
-        # Índice
-        self.lcd.print(f"[{self.menu_index + 1}/{len(self.employees)}]", 2)
-        self.lcd.print("OK=Confirmar ESC=Atrás", 3)
+        # Línea 3: Compacta instrucciones y contador
+        nav = f"[{self.menu_index + 1}/{len(self.employees)}]"
+        self.lcd.print(f"{nav} OK:Sel BK:Vol", 3)
     
     def display_select_task(self):
         """Menú de selección de tarea"""
@@ -529,30 +546,28 @@ class SmartHourMeterApp:
         # Mostrar tarea actual
         task = self.tasks[self.menu_index]
         self.lcd.print(f"> {task.op_group_name[:18]}", 1)
-        self.lcd.print(f"Meta: {task.order_quantity}", 2)
+        self.lcd.print(f"Piezas Requqeridas: {task.order_quantity}", 2)
         
-        # Índice
-        self.lcd.print(f"[{self.menu_index + 1}/{len(self.tasks)}]", 3)
-    
+        # Línea 3: Reorganizada para incluir BACK
+        nav = f"[{self.menu_index + 1}/{len(self.tasks)}]"
+        self.lcd.print(f"{nav} OK:Sel BK:Vol", 3)
+
     def display_monitoring(self):
-        """Pantalla de monitoreo"""
+        """Pantalla de monitoreo (Versión alineada con DEV)"""
         self.lcd.clear()
-        self.lcd.print("MONITOREANDO", 0)
+        self.lcd.print("TRABAJANDO EN:", 0)
         
-        # Mostrar empleado
-        emp_name = self.session.employee.first_name[:10]
-        self.lcd.print(f"Op: {emp_name}", 1)
-        
-        # Mostrar tiempo
-        mins = self.session.time_motor_seconds // 60
-        secs = self.session.time_motor_seconds % 60
-        time_str = f"Tiempo: {mins:02d}:{secs:02d}"
-        self.lcd.print(time_str, 2)
-        
-        # Progreso
-        task = self.session.selected_task
-        progress = f"{self.session.completed_quantity}/{task.order_quantity}"
-        self.lcd.print(progress, 3)
+        if self.session.selected_task:
+            task = self.session.selected_task
+            # Mostrar el nombre del grupo de operación (máximo 18 caracteres para el "> ")
+            self.lcd.print(f"> {task.op_group_name[:18]}", 1)
+            
+            # Línea 2: Podríamos dejarla vacía o mostrar el operario actual (opcional)
+            emp_name = self.session.employee.first_name[:15]
+            self.lcd.print(f"Op: {emp_name}", 2)
+            
+            # Línea 3: Instrucción de finalización
+            self.lcd.print("OK=FINALIZAR TAREA", 3)
     
     def display_input_completed(self):
         """Pantalla para ingresar cantidad completada"""
@@ -598,6 +613,9 @@ class SmartHourMeterApp:
         
         if self.gpio.read_button_confirm():
             self.on_button_confirm()
+
+        if self.gpio.read_button_back():
+            self.on_button_back()
     
     def on_button_up(self):
         """Botón arriba"""
@@ -635,10 +653,13 @@ class SmartHourMeterApp:
             if self.tasks:
                 self.session.selected_task = self.tasks[self.menu_index]
                 self.session.session_start_time = datetime.now()
+                # ACTIVAR INTERLOCK al iniciar trabajo
+                self.gpio.set_interlock(True) 
                 self.state = SystemState.MONITORING
         
         elif self.state == SystemState.MONITORING:
             # Ir a input de cantidad completada
+            self.gpio.set_interlock(False)
             self.quantity_input = 0
             self.state = SystemState.INPUT_COMPLETED
         
@@ -647,6 +668,17 @@ class SmartHourMeterApp:
             self.session.completed_quantity = self.quantity_input
             self.state = SystemState.CLOSING
             self.save_and_close()
+
+    def on_button_back(self):
+        """Lógica para retroceder de estado (Solo en selección)"""
+        if self.state == SystemState.SELECT_EMPLOYEE:
+            self.session.reset()
+            self.menu_index = 0
+            self.state = SystemState.HOME
+        elif self.state == SystemState.SELECT_TASK:
+            self.session.selected_task = None
+            self.menu_index = 0
+            self.state = SystemState.SELECT_EMPLOYEE
     
     def update_vfd_monitoring(self):
         """Actualizar monitoreo de motor"""

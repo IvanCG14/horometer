@@ -1,50 +1,63 @@
--- 1. Crear la Base de Datos
-CREATE DATABASE ERP_Production;
+-- 1. CREACIÃ“N DE LA BASE DE DATOS
+USE [master];
 GO
 
-USE ERP_Production;
+IF EXISTS (SELECT * FROM sys.databases WHERE name = 'ERP_Production')
+BEGIN
+    ALTER DATABASE [ERP_Production] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE [ERP_Production];
+END
 GO
 
--- 2. Tabla de Empleados (Para la selección inicial)
-CREATE TABLE Employees (
+CREATE DATABASE [ERP_Production];
+GO
+
+USE [ERP_Production];
+GO
+
+-- 2. TABLA DE EMPLEADOS
+-- El script busca: Employee, First_Name, Last_Name y la columna 'active'
+CREATE TABLE dbo.Employee (
     Employee VARCHAR(50) PRIMARY KEY,
-    First_Name VARCHAR(50),
-    Last_Name VARCHAR(50)
+    First_Name VARCHAR(100) NOT NULL,
+    Last_Name VARCHAR(100) NOT NULL,
+    active BIT DEFAULT 1
 );
 
--- 3. Tabla de Grupos Operacionales
-CREATE TABLE Op_Groups (
+-- 3. TABLA DE GRUPOS DE OPERACIÃ“N (OP_GROUP)
+-- El script realiza un LEFT JOIN con esta tabla para agrupar tareas
+CREATE TABLE dbo.Op_Group (
     Op_Group VARCHAR(50) PRIMARY KEY,
-    Name VARCHAR(100)
+    Name VARCHAR(100) NOT NULL
 );
 
--- 4. Tabla de Cabecera de Jobs (Para las cantidades)
-CREATE TABLE Jobs (
+-- 4. TABLA DE TRABAJOS (JOB)
+-- Provee el Order_Quantity que el script muestra en pantalla
+CREATE TABLE dbo.Job (
     Job VARCHAR(50) PRIMARY KEY,
-    Order_Quantity INT
+    Order_Quantity INT NOT NULL
 );
 
--- 5. Tabla de Operaciones (El corazón del filtro)
-CREATE TABLE Job_Operations (
-    Job_Operation_ID INT PRIMARY KEY IDENTITY(1,1),
-    Job VARCHAR(50),
-    Job_Operation VARCHAR(50),
-    Description VARCHAR(100),
-    Work_Center VARCHAR(50),
-    Op_Group VARCHAR(50),
+-- 5. TABLA DE OPERACIONES (JOB_OPERATION)
+-- Contiene la lÃ³gica del Work_Center (ej. 'TORNO 17') y los tiempos estimados
+CREATE TABLE dbo.Job_Operation (
+    Job_Operation VARCHAR(50) PRIMARY KEY,
     Status VARCHAR(20),
-    Est_Run_Hrs FLOAT,
-    FOREIGN KEY (Job) REFERENCES Jobs(Job),
-    FOREIGN KEY (Op_Group) REFERENCES Op_Groups(Op_Group)
+    Job VARCHAR(50) NOT NULL REFERENCES dbo.Job(Job),
+    Work_Center VARCHAR(50) NOT NULL,
+    Description VARCHAR(200),
+    Op_Group VARCHAR(50) REFERENCES dbo.Op_Group(Op_Group),
+    Est_Run_Hrs FLOAT DEFAULT 0.0
 );
 
--- 6. Tabla de Logs de Producción (Donde se guardará el resultado)
-CREATE TABLE Job_Operation_ActualTime (
-    Log_ID INT PRIMARY KEY IDENTITY(1,1),
-    Employee VARCHAR(50),
-    Job VARCHAR(255), -- Longitud extendida para concatenados
+-- 6. TABLA DE REGISTRO DE SESIONES (JOB_OPERATION_ACTUALTIME)
+-- Donde el script guarda los datos finales al terminar una tarea
+CREATE TABLE dbo.Job_Operation_ActualTime (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    Employee VARCHAR(50) NOT NULL,
+    Job VARCHAR(200) NOT NULL,
     Job_Operation VARCHAR(100),
-    Work_Center VARCHAR(50),
+    Work_Center VARCHAR(50) NOT NULL,
     Order_Quantity INT,
     Completed_Quantity INT,
     Motor_Time_Seconds INT,
@@ -52,4 +65,13 @@ CREATE TABLE Job_Operation_ActualTime (
     Status VARCHAR(20),
     Record_Date DATETIME DEFAULT GETDATE()
 );
+GO
+
+-- Cambiamos el valor por defecto de la columna Record_Date a hora local
+ALTER TABLE dbo.Job_Operation_ActualTime 
+DROP CONSTRAINT IF EXISTS DF__Job_Opera__Recor__XXXXXXXX; -- SQL genera un nombre aleatorio
+
+-- Aplicamos GETDATE() para hora local
+ALTER TABLE dbo.Job_Operation_ActualTime 
+ADD CONSTRAINT DF_RecordDate_Local DEFAULT GETDATE() FOR Record_Date;
 GO
