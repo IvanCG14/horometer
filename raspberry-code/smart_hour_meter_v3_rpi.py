@@ -23,8 +23,8 @@ from typing import List, Optional, Dict
 # ============================================================================
 
 PIN_VFD_SIGNAL = 17          # GPIO 17 - Entrada del VFD (HIGH = motor corriendo)
-PIN_BTN_UP = 27              # GPIO 27 - Botón arriba
-PIN_BTN_DOWN = 22            # GPIO 22 - Botón abajo
+PIN_BTN_UP = 20              # GPIO 27 - Botón arriba
+PIN_BTN_DOWN = 21            # GPIO 22 - Botón abajo
 PIN_BTN_CONFIRM = 23         # GPIO 23 - Botón confirmar
 PIN_BTN_BACK = 24            # GPIO 24 - Botón de retroceso
 PIN_INTERLOCK = 18           # GPIO 18 - Salida de control (Relé/SSR)
